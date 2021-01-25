@@ -1,0 +1,98 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    sshAntTask
+}
+
+dependencies {
+    sshAntTask 'org.apache.ant:ant-jsch:1.9.2'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'Main'
+    }
+}
+
+ant.taskdef(
+        name: 'scp',
+        classname: 'org.apache.tools.ant.taskdefs.optional.ssh.Scp',
+        classpath: configurations.sshAntTask.asPath)
+
+ant.taskdef(
+        name: 'ssh',
+        classname: 'org.apache.tools.ant.taskdefs.optional.ssh.SSHExec',
+        classpath: configurations.sshAntTask.asPath)
+
+task deploy {
+    dependsOn jar
+
+    doLast {
+        def knownHosts = File.createTempFile('knownhosts', 'txt')
+        def host = 'rp-f08412.local'
+        def user = 'root'
+        def password = 'happyducks'
+
+        println 'Starting deploy to Red Pitaya'
+
+        try {
+
+            ant.scp(
+                    file: "./build/libs/redpitaya-controller.jar",
+                    todir: "${user}@${host}:~",
+                    password: password,
+                    trust: true,
+                    knownhosts: knownHosts
+            )
+
+            println 'Successfully deployed to Red Pitaya'
+
+        } catch (Exception e) {
+            println 'Failed to deploy to Red Pitaya'
+
+            throw e
+        } finally {
+            knownHosts.delete()
+        }
+    }
+}
+
+task run {
+    dependsOn deploy
+
+    doLast {
+        def knownHosts = File.createTempFile('knownhosts', 'txt')
+        def host = 'rp-f08412.local'
+        def user = 'root'
+        def password = 'happyducks'
+
+        println 'Starting run on Red Pitaya'
+
+        try {
+
+            ant.ssh(
+                    host: host,
+                    username: user,
+                    password: password,
+                    trust: true,
+                    knownhosts: knownHosts,
+                    command: "killall java ; java -jar -Djava.library.path=/root/ redpitaya-controller.jar &"
+            )
+
+            println 'Successfully starting on Red Pitaya'
+
+        } catch (Exception e) {
+            println 'Failed to start on Red Pitaya'
+
+            throw e
+        } finally {
+            knownHosts.delete()
+        }
+    }
+}
